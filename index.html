@@ -1,0 +1,333 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wordle Helper</title>
+  <style>
+    :root {
+      --primary: #4a90e2;
+      --accent: #27ae60;
+      --danger: #e74c3c;
+      --bg: #f4f6f8;
+      --card: #fff;
+      --text: #333;
+      --green: #6aaa64;
+      --yellow: #c9b458;
+      --gray: #787c7e;
+    }* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  margin: 0;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+
+.container {
+  background: var(--card);
+  padding: 2rem;
+  border-radius: 16px;
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  max-width: 600px;
+  width: 90%;
+  text-align: center;
+}
+
+h1 {
+  color: var(--primary);
+  margin-bottom: 1.5rem;
+}
+
+#loading {
+  margin-bottom: 1rem;
+  color: #888;
+}
+
+.tile-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tile-input {
+  width: 3rem;
+  height: 3rem;
+  font-size: 1.5rem;
+  text-transform: uppercase;
+  text-align: center;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  transition: transform 0.2s ease, background-color 0.3s;
+}
+
+.tile-input:focus {
+  outline: none;
+  border-color: var(--primary);
+  transform: scale(1.1);
+}
+
+.btn-group {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+button {
+  flex: 1;
+  padding: 0.75rem;
+  font-size: 1rem;
+  border: none;
+  border-radius: 10px;
+  color: white;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+#addBtn {
+  background-color: var(--accent);
+}
+#addBtn:hover {
+  background-color: #219150;
+}
+
+#resetBtn {
+  background-color: var(--danger);
+}
+#resetBtn:hover {
+  background-color: #c0392b;
+}
+
+h2 {
+  margin-top: 2rem;
+  font-size: 1.25rem;
+  color: var(--primary);
+  border-bottom: 2px solid #eee;
+  padding-bottom: 0.5rem;
+}
+
+ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+li {
+  background: #f0f4f8;
+  margin: 0.5rem 0;
+  padding: 0.6rem;
+  border-radius: 8px;
+  font-weight: 500;
+  display: flex;
+  justify-content: center;
+  gap: 0.5rem;
+  position: relative;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.tile {
+  width: 2rem;
+  height: 2rem;
+  line-height: 2rem;
+  text-align: center;
+  border-radius: 4px;
+  font-weight: bold;
+  color: white;
+}
+
+.green { background-color: var(--green); }
+.yellow { background-color: var(--yellow); }
+.gray { background-color: var(--gray); }
+
+.remove-btn {
+  position: absolute;
+  right: 10px;
+  top: 6px;
+  background: var(--danger);
+  border: none;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 18px;
+}
+
+#nextWord {
+  display: inline-block;
+  font-size: 1.75rem;
+  margin-top: 1rem;
+  font-weight: bold;
+  color: var(--accent);
+}
+
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Wordle Helper</h1>
+    <div id="loading">Loading word list...</div>
+    <div id="inputArea" style="display:none;">
+      <div class="tile-row" id="guessRow"></div>
+      <div class="tile-row" id="patternRow"></div>
+      <div class="btn-group">
+        <button id="addBtn">Add Guess</button>
+        <button id="resetBtn">Reset</button>
+      </div>
+    </div><div id="guesses">
+  <h2>Past Guesses</h2>
+  <ul id="guessList"></ul>
+</div>
+
+<div id="suggestion">
+  <h2>Suggested Next Word</h2>
+  <span id="nextWord"></span>
+</div>
+
+  </div>  <script>
+    const wordListUrl = 'https://raw.githubusercontent.com/tabatkins/wordle-list/main/words';
+    let wordList = [];
+    let possibleWords = [];
+    const guessList = [];
+
+    fetch(wordListUrl)
+      .then(res => res.text())
+      .then(text => {
+        wordList = text.split(/\r?\n/).map(w => w.trim().toLowerCase()).filter(w => w.length === 5);
+        possibleWords = [...wordList];
+        document.getElementById('loading').style.display = 'none';
+        document.getElementById('inputArea').style.display = 'block';
+        createInputs();
+      })
+      .catch(err => {
+        document.getElementById('loading').textContent = 'Failed to load word list.';
+        console.error(err);
+      });
+
+    function createInputs() {
+      const guessRow = document.getElementById('guessRow');
+      const patternRow = document.getElementById('patternRow');
+      for (let i = 0; i < 5; i++) {
+        const g = document.createElement('input');
+        g.className = 'tile-input';
+        g.maxLength = 1;
+        guessRow.appendChild(g);
+
+        const p = document.createElement('input');
+        p.className = 'tile-input';
+        p.maxLength = 1;
+        p.placeholder = 'B/Y/G';
+        patternRow.appendChild(p);
+      }
+    }
+
+    function getGuessAndPattern() {
+      const guess = Array.from(document.getElementById('guessRow').children).map(el => el.value.toLowerCase()).join('');
+      const pattern = Array.from(document.getElementById('patternRow').children).map(el => el.value.toLowerCase()).join('');
+      return { guess, pattern };
+    }
+
+    function applyPattern(word, guess, pattern) {
+      for (let i = 0; i < 5; i++) {
+        const p = pattern[i];
+        const letter = guess[i];
+        if (p === 'g' && word[i] !== letter) return false;
+        if (p === 'y') {
+          if (word[i] === letter || !word.includes(letter)) return false;
+        }
+        if (p === 'b') {
+          const isElsewhere = guess.split('').some((l,j) => j !== i && l === letter && ['g','y'].includes(pattern[j]));
+          if (!isElsewhere && word.includes(letter)) return false;
+        }
+      }
+      return true;
+    }
+
+    function filterPossible() {
+      possibleWords = wordList.filter(w =>
+        guessList.every(({ guess, pattern }) => applyPattern(w, guess, pattern))
+      );
+    }
+
+    function scoreWord(word) {
+      const freq = {};
+      for (const w of possibleWords) {
+        for (const c of new Set(w)) {
+          freq[c] = (freq[c] || 0) + 1;
+        }
+      }
+      return [...new Set(word)].reduce((sum, c) => sum + (freq[c] || 0), 0);
+    }
+
+    function suggestNext() {
+      if (possibleWords.length === 0) return 'No words found';
+      const scored = possibleWords.map(w => ({ w, score: scoreWord(w) }));
+      scored.sort((a, b) => b.score - a.score);
+      return scored[0].w;
+    }
+
+    function removeGuess(index) {
+      guessList.splice(index, 1);
+      renderGuessList();
+      filterPossible();
+      document.getElementById('nextWord').textContent = suggestNext().toUpperCase();
+    }
+
+    function renderGuessList() {
+      const list = document.getElementById('guessList');
+      list.innerHTML = '';
+      guessList.forEach(({ guess, pattern }, index) => {
+        const li = document.createElement('li');
+
+        for (let i = 0; i < 5; i++) {
+          const span = document.createElement('div');
+          span.className = 'tile ' + (pattern[i] === 'g' ? 'green' : pattern[i] === 'y' ? 'yellow' : 'gray');
+          span.textContent = guess[i].toUpperCase();
+          li.appendChild(span);
+        }
+
+        const remove = document.createElement('button');
+        remove.className = 'remove-btn';
+        remove.innerHTML = '&times;';
+        remove.onclick = () => removeGuess(index);
+        li.appendChild(remove);
+
+        list.appendChild(li);
+      });
+    }
+
+    document.getElementById('addBtn').addEventListener('click', () => {
+      const { guess, pattern } = getGuessAndPattern();
+      if (guess.length !== 5 || pattern.length !== 5) {
+        alert('Both guess and pattern must be 5 characters long.');
+        return;
+      }
+      guessList.push({ guess, pattern });
+      renderGuessList();
+      filterPossible();
+      document.getElementById('nextWord').textContent = suggestNext().toUpperCase();
+      document.querySelectorAll('.tile-input').forEach(el => el.value = '');
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      possibleWords = [...wordList];
+      guessList.length = 0;
+      renderGuessList();
+      document.getElementById('nextWord').textContent = '';
+      document.querySelectorAll('.tile-input').forEach(el => el.value = '');
+    });
+  </script></body>
+</html>
